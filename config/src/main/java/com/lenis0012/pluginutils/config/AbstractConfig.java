@@ -1,15 +1,5 @@
 package com.lenis0012.pluginutils.config;
 
-import com.lenis0012.pluginutils.config.mapping.ConfigHeader;
-import com.lenis0012.pluginutils.config.mapping.ConfigKey;
-import com.lenis0012.pluginutils.config.mapping.ConfigMapper;
-import com.lenis0012.pluginutils.config.mapping.ConfigSection;
-import lombok.NonNull;
-import lombok.SneakyThrows;
-import org.bukkit.Bukkit;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.plugin.Plugin;
-
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -18,6 +8,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import org.bukkit.Bukkit;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.plugin.Plugin;
+
+import com.lenis0012.pluginutils.config.mapping.ConfigHeader;
+import com.lenis0012.pluginutils.config.mapping.ConfigKey;
+import com.lenis0012.pluginutils.config.mapping.ConfigMapper;
+import com.lenis0012.pluginutils.config.mapping.ConfigSection;
+
+import lombok.NonNull;
+import lombok.SneakyThrows;
 
 public class AbstractConfig {
     private final Map<Class<?>, List<Field>> dataFields = new HashMap<>();
@@ -46,21 +48,21 @@ public class AbstractConfig {
 
     private void loadSectionKeys(Class<?> source, String basePath) {
         List<Field> dataFields = new ArrayList<>();
-        for(Field field : source.getDeclaredFields()) {
+        for (Field field : source.getDeclaredFields()) {
             ConfigKey key = field.getAnnotation(ConfigKey.class);
-            if(key == null) {
+            if (key == null) {
                 continue;
             }
 
             // Headers
             String keyPath = key.path().isEmpty() ? toConfigString(field.getName()) : key.path();
             ConfigHeader header = field.getAnnotation(ConfigHeader.class);
-            if(header != null) {
+            if (header != null) {
                 String path = header.path().isEmpty() ? keyPath : header.path();
                 config.header(basePath + path, header.value());
             }
 
-            if(field.getType().isAnnotationPresent(ConfigSection.class)) {
+            if (field.getType().isAnnotationPresent(ConfigSection.class)) {
                 loadSectionKeys(field.getType(), basePath + keyPath + ".");
             }
 
@@ -71,14 +73,16 @@ public class AbstractConfig {
     }
 
     /**
-     * @return Whether or not values that are not registered in class should be removed from config
+     * @return Whether or not values that are not registered in class should be
+     *         removed from config
      */
     protected boolean isClearOnSave() {
         return clearOnSave;
     }
 
     /**
-     * Set whether or not values that are not registered in class should be removed from config.
+     * Set whether or not values that are not registered in class should be removed
+     * from config.
      *
      * @param flag Flag
      */
@@ -88,7 +92,7 @@ public class AbstractConfig {
 
     public void reload() {
         config.reload();
-        if(mapper.header().length > 0) {
+        if (mapper.header().length > 0) {
             config.mainHeader(mapper.header());
         }
 
@@ -98,22 +102,23 @@ public class AbstractConfig {
 
     @SneakyThrows
     private void reloadSection(ConfigurationSection source, Object target) {
-        for(Field field : dataFields.get(target.getClass())) {
+        for (Field field : dataFields.get(target.getClass())) {
             ConfigKey key = field.getAnnotation(ConfigKey.class);
             String path = key.path().isEmpty() ? toConfigString(field.getName()) : key.path();
-            if(!config.contains(path)) {
+            if (!config.contains(path)) {
                 continue;
             }
 
             Object value = source.get(path);
 
-            if(value instanceof ConfigurationSection && field.getType().isAnnotationPresent(ConfigSection.class)) {
+            if (value instanceof ConfigurationSection && field.getType().isAnnotationPresent(ConfigSection.class)) {
                 try {
                     Object result = field.getType().getDeclaredConstructor().newInstance();
                     reloadSection((ConfigurationSection) value, result);
                     field.set(target, result);
                 } catch (Exception e) {
-                    Bukkit.getLogger().log(Level.WARNING, "Failed to load property \"" + path + "\" from " + mapper.fileName());
+                    Bukkit.getLogger().log(Level.WARNING,
+                            "Failed to load property \"" + path + "\" from " + mapper.fileName());
                 }
             } else {
                 field.set(target, value);
@@ -129,13 +134,13 @@ public class AbstractConfig {
 
     @SneakyThrows
     private void saveSection(ConfigurationSection target, Object source) {
-        for(Field field : dataFields.get(source.getClass())) {
+        for (Field field : dataFields.get(source.getClass())) {
             ConfigKey key = field.getAnnotation(ConfigKey.class);
             String path = key.path().isEmpty() ? toConfigString(field.getName()) : key.path();
 
-            if(field.getType().isAnnotationPresent(ConfigSection.class)) {
+            if (field.getType().isAnnotationPresent(ConfigSection.class)) {
                 ConfigurationSection section = target.getConfigurationSection(path);
-                if(section == null) {
+                if (section == null) {
                     section = target.createSection(path);
                 }
                 Object sourceValue = field.get(source);
@@ -146,16 +151,13 @@ public class AbstractConfig {
         }
     }
 
-    private String toConfigString(String value) {
-        StringBuilder builder = new StringBuilder();
-        for(int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if(Character.isUpperCase(c)) {
-                builder.append('-').append(Character.toLowerCase(c));
-            } else {
-                builder.append(c);
-            }
-        }
-        return builder.toString();
+    // useXMLHttpRequest | XMLHttpRequest
+    // useXML-Http-Request | XML-Http-Request
+    // use-XML-Http-Request | XML-Http-Request
+    // use-xml-http-request | xml-http-request
+    private String toConfigString(String fieldName) {
+        return fieldName.replaceAll("([A-Z])([a-z])", "-$1$2")
+                .replaceAll("([a-z])([A-Z])", "$1-$2")
+                .toLowerCase();
     }
 }
